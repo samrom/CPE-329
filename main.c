@@ -8,6 +8,7 @@
 
  void lcd_initialization();
 
+
 /*
 
  * main.c
@@ -34,7 +35,9 @@
 int main(void) {
 
     WDTCTL = WDTPW | WDTHOLD; // Stop watchdog timer
-
+    P1IE |= BIT3; // P1.3 interrupt enabled
+    P1IES |= BIT3; // P1.3 Hi/lo edge
+    P1IFG &= ~BIT3; // P1.3 IFG cleared
     //16Mhz
 
 	if (CALBC1_16MHZ==0xFF) {
@@ -51,12 +54,13 @@ int main(void) {
 
 //MSP430 Pins
 
-    P1DIR = 0xF0; // sets port 1 pins as an output
+    P1DIR |= 0xF0; // sets port 1 upper pins as an output and lower as input
 
     P2DIR = 0x07; // sets E, RW, and RS as output 0000 0111
 
 
     lcd_initialization();
+
     lcd_write_address(0x00);  // display set 0000 1111
     lcd_write_data('H');
     _delay_cycles(4);
@@ -84,7 +88,29 @@ int main(void) {
 	lcd_write_data('D');
 	lcd_write_address( 0x0B);
 	lcd_write_data('!');
+
+
+	//for(;;){
+//if((P1IN & BIT3) == 0){ // if button not pushed
+//			P1IN &=
+//		~BIT3;
+//			}
+//		else{
+//			lcd_initialization();
+//			lcd_write_address(0x00);  // display set 0000 1111
+//				lcd_write_data('H');
+//				lcd_write_address(0x01);
+//				lcd_write_data('E');
+//				lcd_write_address( 0x02);
+//				lcd_write_data('L');
+//				lcd_write_address( 0x03);
+//				lcd_write_data('L');
+//				lcd_write_address( 0x04);
+//				lcd_write_data('O');
+//				break;
 //
+//		}
+	//}
 	return 0;
 
 }
@@ -96,7 +122,8 @@ int main(void) {
 
  */
 void lcd_initialization(){
-    _delay_cycles(6400000); // 40 ms delay
+
+	_delay_cycles(6400000); // 40 ms delay
     P2OUT |= 0x01; // set enable high
     P1OUT = BIT5;  // nibble mode
     P2OUT &= ~0x01; // toggle enable off.
@@ -112,8 +139,10 @@ void lcd_initialization(){
     _delay_cycles(34000); // 1.53 + extra ms
     lcd_write_cmd(0x06);
     _delay_cycles(34000); // 1.52ms
-
     P2OUT ^= 0x01; // set enable low.
+
+
+    // button pressed
 }
 void lcd_write_cmd(char cmd){
 
@@ -176,4 +205,22 @@ void lcd_write_address(char address){
 	 lcd_write_cmd(address | 0x80);  // address on the LCD
 	 _delay_cycles(800); // 37+ us delay
 	return;
+}
+
+#pragma vector=PORT1_VECTOR
+__interrupt void Port_1(void)
+{
+	lcd_initialization();
+				lcd_write_address(0x00);  // display set 0000 1111
+					lcd_write_data('H');
+					lcd_write_address(0x01);
+					lcd_write_data('E');
+					lcd_write_address( 0x02);
+					lcd_write_data('L');
+					lcd_write_address( 0x03);
+					lcd_write_data('L');
+					lcd_write_address( 0x04);
+					lcd_write_data('O');
+		P1IES ^= BIT3;
+		P1IFG &= ~BIT3; // P1.3 IFG cleared
 }
