@@ -7,6 +7,7 @@
  void lcd_write_address(char address);
 
  void lcd_initialization();
+ void Newlcd_initializationDelete();
 
 
 /*
@@ -57,11 +58,12 @@ int main(void) {
     P1DIR |= 0xF0; // sets port 1 upper pins as an output and lower as input
 
     P2DIR = 0x07; // sets E, RW, and RS as output 0000 0111
+  //  RSTDIR = 0x00;
 
 
 
 
-  
+    //INTERRUPT ENDS
 
 
     lcd_initialization();
@@ -109,7 +111,7 @@ int main(void) {
 	    	 // interrupts enabled!
 
 
- ////**ENDS interrupt
+ ////**ENDS LOOP VERSION PUSHBUTTON
 
 
 	return 0;
@@ -135,16 +137,30 @@ __interrupt void Port_1(void){ // ISR
  if (P1IFG & BIT3){
  P1OUT ^= BIT4; // Toggle P1.4
  lcd_initialization();
-  lcd_write_address(0x00);  // display set 0000 1111
-lcd_write_data('H');
+ lcd_write_address(0x00);  // display set 0000 1111
+lcd_write_data(' ');
 lcd_write_address(0x01);
-lcd_write_data('E');
+lcd_write_data(' ');
 lcd_write_address( 0x02);
-lcd_write_data('L');
+lcd_write_data(' ');
 lcd_write_address( 0x03);
-lcd_write_data('L');
+lcd_write_data('*');
 lcd_write_address( 0x04);
-lcd_write_data('O');
+lcd_write_data('*');
+lcd_write_address(0x05);
+lcd_write_data('S');
+lcd_write_address( 0x06);
+lcd_write_data('M');
+lcd_write_address( 0x07);
+lcd_write_data('I');
+lcd_write_address( 0x08);
+lcd_write_data('L');
+lcd_write_address( 0x09);
+lcd_write_data('E');
+lcd_write_address( 0x0A);
+lcd_write_data('*');
+lcd_write_address(0x0B);
+lcd_write_data('*');
  P1IFG &= ~BIT3; // Clear the Bit 3 interrupt flag,
  // leave all other bits untouched
  }
@@ -156,6 +172,27 @@ lcd_write_data('O');
 
      P2OUT &= ~0x07;
      _delay_cycles(16);
+}
+
+void Newlcd_initializationDelete(){
+	_delay_cycles(6400000); // 40 ms delay
+    P2OUT |= 0x01; // set enable high
+    P1OUT = BIT5;  // nibble mode
+    P2OUT &= ~0x01; // toggle enable off.
+    P1OUT &= ~BIT5;
+
+    P2OUT &= ~0x07;
+    _delay_cycles(16);
+    lcd_write_cmd(0x2F);
+    _delay_cycles(7200); // 39+ us delay
+    lcd_write_cmd(0x0F);  // display set 0000 1111
+    _delay_cycles(7200);   // 37 us delay
+    lcd_write_cmd(0x01);  // display clear
+    _delay_cycles(34000); // 1.53 + extra ms
+    lcd_write_cmd(0x04);  // entry mode set 0000 0100, decrement mode.
+    _delay_cycles(34000); // 1.52ms
+    P2OUT ^= 0x01; // set enable low.
+
 }
 void lcd_initialization(){
 
@@ -242,21 +279,3 @@ void lcd_write_address(char address){
 	 _delay_cycles(800); // 37+ us delay
 	return;
 }
-
-//#pragma vector=PORT1_VECTOR
-//__interrupt void Port_1(void)
-//{
-//	lcd_initialization();
-//				lcd_write_address(0x00);  // display set 0000 1111
-//					lcd_write_data('H');
-//					lcd_write_address(0x01);
-//					lcd_write_data('E');
-//					lcd_write_address( 0x02);
-//					lcd_write_data('L');
-//					lcd_write_address( 0x03);
-//					lcd_write_data('L');
-//					lcd_write_address( 0x04);
-//					lcd_write_data('O');
-//		P1IES ^= BIT3;
-//		P1IFG &= ~BIT3; // P1.3 IFG cleared
-//}
