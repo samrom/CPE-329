@@ -39,6 +39,8 @@ int main(void) {
 	BCSCTL1 = CALBC1_16MHZ;
 	DCOCTL = CALDCO_16MHZ;
 
+
+
     P1DIR |= 0xF0; // sets port 1 upper pins as an output and lower as input
     P2DIR  = 0x07; // sets E, RW, and RS as output 0000 0111
     // Interrupts
@@ -49,6 +51,16 @@ int main(void) {
      char word[] = "Hello World!";
      lcd_word(word);
 
+     //smiley
+     lcd_write_cmd(0x40);
+     lcd_write_data(0x0E); //1
+     lcd_write_data(0x1B); //2
+     lcd_write_data(0x11); //3
+     lcd_write_data(0x11); //4
+     lcd_write_data(0x11); //5
+     lcd_write_data(0x11); //6
+     lcd_write_data(0x11); //7
+     lcd_write_data(0x1F); //8
      //INTERRUPT BEGINS
 
 	 P1IE  |= BIT3 + BIT2; // Enable interrupts for P1.3 and P1.2
@@ -131,6 +143,7 @@ void lcd_write_data(char data){
 	//Clear everything again.
 	_delay_cycles(16);
 	P2OUT &= ~0x07;  // sets everything low
+	_delay_cycles(7200); //added delay to finaly work
 //	P1OUT &= 0x00;
     return;
 
@@ -155,6 +168,10 @@ __interrupt void Port_1(void){ // ISR
 		 char omg[] = "    OMG!!!!";
 		 lcd_word(omg);
          P1IFG &= ~BIT3; // Clear the Bit 3 interrupt flag,
+
+         // custom character
+         lcd_write_cmd(0xC0);
+         lcd_write_data(0x00);
 
 	 }
 	 if (P1IFG & BIT2){
