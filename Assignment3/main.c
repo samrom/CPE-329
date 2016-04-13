@@ -68,6 +68,7 @@
 
 #include <msp430.h>
 #define cycles 29000 // 50ms period.
+int count = 0;
 
 int main(void){
 WDTCTL = WDTPW | WDTHOLD; // Stop watchdog timer
@@ -79,9 +80,9 @@ WDTCTL = WDTPW | WDTHOLD; // Stop watchdog timer
 //	BCSCTL1 = CALBC1_16MHZ;
 //	DCOCTL = CALDCO_16MHZ;
 
+  count = 0;
 
-
-  P1DIR |= BIT0+ BIT1 +BIT4;                         // P1.0 output
+  P1DIR |= BIT0+ BIT1 +BIT4 + BIT6;                         // P1.0 output
   CCTL0 = CCIE;                             // CCR0 interrupt enabled
   CCR0 = cycles;
   TACTL = TASSEL_2 + MC_2;                  // SMCLK, contmode
@@ -91,6 +92,8 @@ WDTCTL = WDTPW | WDTHOLD; // Stop watchdog timer
 
 
   _BIS_SR(LPM0_bits + GIE);                 // Enter LPM0 w/ interrupt
+
+
 }
 
 // Timer A0 interrupt service routine
@@ -102,10 +105,22 @@ __interrupt void Timer_A (void)
   if(P1OUT & BIT0) {
 	  P1OUT &= ~BIT0;
 	  CCR0 += cycles; //320;
+	  count++;
   }
+
   else{
 	  P1OUT |= 0x01;
 	  CCR0 += cycles; //320;
   }
+
+  if(count == 50)
+	{
+	  P1OUT |= BIT6;
+	}
+    if(count == 100)
+    {
+  	  P1OUT &= ~BIT6;
+  	  count = 0;
+    }
   P1OUT &= ~BIT1; // exit ISR 0000 0010
 }
