@@ -4,7 +4,7 @@
 #define Voff 1120
 #define limit 130
 #define Vchange 16
-#define rampCycles 134
+
 
 //WaveFunctions
 void squareWave();
@@ -14,10 +14,14 @@ volatile unsigned int level = Voff;
 int wav_sel = 0;
 int duty_sel = 0;
 int freq_sel = 0;
+int count = 0;
 int freq[5] = {10000,5000,3333,2500,2000}; // 100Hz, 200Hz, 300Hz, 400Hz, 500Hz
 double duty_cycle[10] = {.1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0};
+int limits[5]={111,55,37,27,22};
+int ramp[5]={25,49,73,98,123};
 int ccro = 0;
 double duty = 0.0;
+int rampCycles = 0;
 
 int main(void)
 {
@@ -124,7 +128,21 @@ __interrupt void Timer_A (void)
 			}
 	 }
 	if(wav_sel == 2){
-		//P1OUT &= ~BIT6;
+		rampCycles = ramp[freq_sel];
+	  if(count < limits[freq_sel]){
+	  	  level += ramp[freq_sel];
+	  	  Drive_DAC(level);
+	  	 // P1OUT |= BIT0; // check to see if we've entered the function
+		  CCR0 += 100; // 33.3us
+		  count++;
+	  }
+	  else{
+		  level = Voff;
+		  Drive_DAC(level);
+		  CCR0 += 100;
+		  count = 0;
+	  }
+
 	}
     if(wav_sel == 3){
     	//P1OUT |= BIT6;
