@@ -1,9 +1,12 @@
 #include <msp430g2553.h>
-#define cycles 167 // 60us per step for 16MHz .
+#define steps 50 // 60us per step for 16MHz .
+#define cyclesS 10000
 #define Vpp  2200
 #define Voff 0
 #define limit 130
 #define Vchange 16
+#define voltage 40  // voltage per step
+#define bruteCRR0 368
 
 
 //WaveFunctions
@@ -17,13 +20,14 @@ int freq_sel = 0;
 int count = 0;
 int freq[5] = {9500,5000,3300,2500,2000}; // 100Hz, 200Hz, 300Hz, 400Hz, 500Hz;  period/SMclk
 double duty_cycle[11] = {0,.1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0};
-int  limits[5]={118,64,43,35,35}; // Steps
-int ramp[5]={14,14,14,14,14}; //voltage change per step in terms of Dn
+int  ccro_ramp[5]={368, 190, 128, 97, 76}; // CCRO
+int ramp[5]={14,30,55,14,14}; //voltage change per step in terms of Dn
 int ccro = 0;
 double duty = 0.0;
 int rampCycles = 0;
-
+// PUt const before sin look up table
 int main(void)
+
 {
   WDTCTL = WDTPW + WDTHOLD;        // Stop watchdog timer
 
@@ -99,7 +103,7 @@ void Drive_DAC(unsigned int level){
 		       (DAC_Word & 0x00FF);  // Transmit lower byte to DAC
 
   while (!(IFG2 & UCB0TXIFG));       // USCI_A0 TX buffer ready?
-  __delay_cycles(20);               // Delay 200 16 MHz SMCLK periods
+  __delay_cycles(20);               // Delay 20 16 MHz SMCLK periods
                                      // (12.5 us) to allow SIMO to complete
   P1OUT |= BIT4;                     // Set P1.4   (drive /CS high on DAC)
   return;
@@ -111,7 +115,6 @@ __interrupt void Timer_A (void)
 	if(wav_sel == 1){
 
 		 if(level == Voff){
-			  //P1OUT ^= BIT0;
 			  level = Voff +Vpp;
 			  Drive_DAC(level);
 			  duty = duty_cycle[duty_sel];
@@ -119,7 +122,6 @@ __interrupt void Timer_A (void)
 			  CCR0 += ccro;//duty_cycle[duty_sel]);
 			}
 			else{
-			 // P1OUT ^= BIT6;
 			  level = Voff;
 			  Drive_DAC(level);
 			  duty = 1 - duty_cycle[duty_sel];
@@ -127,19 +129,20 @@ __interrupt void Timer_A (void)
 			  CCR0 += ccro;//(100-duty_cycle[duty_sel]);
 			}
 	 }
+
+	// Sawtooth
 	if(wav_sel == 2){
-		rampCycles = ramp[freq_sel];
-	  if(count < limits[freq_sel]) {
-	  	  level += ramp[freq_sel];
+	  if(count < 50){//limits[freq_sel]) {
+	  	  level += voltage;//ramp[freq_sel];
 	  	  Drive_DAC(level);
-	  	 // P1OUT |= BIT0; // check to see if we've entered the function
-		  CCR0 += cycles;
+	  	// ccro = freq[freq_sel]; //*duty;
+	  	  CCR0 += ccro_ramp[freq_sel];
 		  count++;
 	  }
 	  else{
 		  level = Voff;
 		  Drive_DAC(level);
-		  CCR0 += cycles;
+		  CCR0 += ccro_ramp[freq_sel];
 		  count = 0;
 	  }
 
