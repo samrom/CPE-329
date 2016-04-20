@@ -1,7 +1,7 @@
 #include <msp430g2553.h>
-#define cycles 4000// 20ms period for 2MHz.
+#define cycles 167 // 60us per step for 16MHz .
 #define Vpp  2200
-#define Voff 1120
+#define Voff 0
 #define limit 130
 #define Vchange 16
 
@@ -15,10 +15,10 @@ int wav_sel = 0;
 int duty_sel = 0;
 int freq_sel = 0;
 int count = 0;
-int freq[5] = {10000,5000,3333,2500,2000}; // 100Hz, 200Hz, 300Hz, 400Hz, 500Hz
-double duty_cycle[10] = {.1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0};
-int limits[5]={111,55,37,27,22};
-int ramp[5]={25,49,73,98,123};
+int freq[5] = {9500,5000,3300,2500,2000}; // 100Hz, 200Hz, 300Hz, 400Hz, 500Hz;  period/SMclk
+double duty_cycle[11] = {0,.1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0};
+int  limits[5]={118,64,43,35,35}; // Steps
+int ramp[5]={14,14,14,14,14}; //voltage change per step in terms of Dn
 int ccro = 0;
 double duty = 0.0;
 int rampCycles = 0;
@@ -99,7 +99,7 @@ void Drive_DAC(unsigned int level){
 		       (DAC_Word & 0x00FF);  // Transmit lower byte to DAC
 
   while (!(IFG2 & UCB0TXIFG));       // USCI_A0 TX buffer ready?
-  __delay_cycles(200);               // Delay 200 16 MHz SMCLK periods
+  __delay_cycles(20);               // Delay 200 16 MHz SMCLK periods
                                      // (12.5 us) to allow SIMO to complete
   P1OUT |= BIT4;                     // Set P1.4   (drive /CS high on DAC)
   return;
@@ -115,7 +115,7 @@ __interrupt void Timer_A (void)
 			  level = Voff +Vpp;
 			  Drive_DAC(level);
 			  duty = duty_cycle[duty_sel];
-			  ccro = freq[freq_sel]*duty;
+			  ccro = freq[freq_sel]; //*duty;
 			  CCR0 += ccro;//duty_cycle[duty_sel]);
 			}
 			else{
@@ -123,23 +123,23 @@ __interrupt void Timer_A (void)
 			  level = Voff;
 			  Drive_DAC(level);
 			  duty = 1 - duty_cycle[duty_sel];
-			  ccro = freq[freq_sel]*duty;
+			  ccro = freq[freq_sel]; //*duty;
 			  CCR0 += ccro;//(100-duty_cycle[duty_sel]);
 			}
 	 }
 	if(wav_sel == 2){
 		rampCycles = ramp[freq_sel];
-	  if(count < limits[freq_sel]){
+	  if(count < limits[freq_sel]) {
 	  	  level += ramp[freq_sel];
 	  	  Drive_DAC(level);
 	  	 // P1OUT |= BIT0; // check to see if we've entered the function
-		  CCR0 += 100; // 33.3us
+		  CCR0 += cycles;
 		  count++;
 	  }
 	  else{
 		  level = Voff;
 		  Drive_DAC(level);
-		  CCR0 += 100;
+		  CCR0 += cycles;
 		  count = 0;
 	  }
 
