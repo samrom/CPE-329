@@ -1,16 +1,25 @@
+
+/*
+ * Project 2: Function Generator
+ * Proffesor Gerfen; CPE329-01
+ * Authors: Samantha Romano and Edith Rodriguez
+ * Submission Date: April 25th, 2016
+ */
+
+
+
 #include <msp430g2553.h>
 #define steps 50 // 60us per step for 16MHz .
-#define cyclesS 10000
+
 #define Vpp  2200
 #define Voff 0
 #define limit 130
-#define Vchange 16
+
 #define voltage 40  // voltage per step
 #define bruteCRR0 368
 
 
-//WaveFunctions
-void squareWave();
+
 
 void Drive_DAC(unsigned int level);
 volatile unsigned int level = Voff;
@@ -18,14 +27,44 @@ int wav_sel = 0;
 int duty_sel = 0;
 int freq_sel = 0;
 int count = 0;
+int ccro = 0;
+double duty = 0.0;
+
+
+
+// Look up Tables
 int freq[5] = {9500,5000,3300,2500,2000}; // 100Hz, 200Hz, 300Hz, 400Hz, 500Hz;  period/SMclk
 double duty_cycle[11] = {0,.1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0};
 int  ccro_ramp[5]={368, 190, 128, 97, 76}; // CCRO
-int ramp[5]={14,30,55,14,14}; //voltage change per step in terms of Dn
-int ccro = 0;
-double duty = 0.0;
-int rampCycles = 0;
+const int sin_table[201] = {2087,	2150,	2213,	2277,	2339,	2402,	2464,	2526,	2587,
+		2648,	2708,	2768,	2826,	2884,	2941,	2998,	3053,	3107,	3160,	3212,
+		3263,	3313,	3361,	3408,	3453,	3498,	3540,	3582,	3621,	3660,	3696,
+		3731,	3764,	3796,	3826,	3853,	3880,	3904,	3926,	3947,	3966,	3982,
+		3997,	4010,	4021,	4030,	4037,	4042,	4045,	4046,	4045,	4042,	4037,
+		4030,	4021,	4010,	3997,	3982,	3966,	3947,	3926,	3904,	3880,	3853,
+		3826,	3796,	3764,	3731,	3696,	3660,	3621,	3582,	3540,	3498,	3453,
+		3408,	3361,	3313,	3263,	3212,	3160,	3107,	3053,	2998,	2941,	2884,
+		2826,	2768,	2708,	2648,	2587,	2526,	2464,	2402,	2339,	2277,	2213,
+		2150,	2087,	2023,	1959,	1896,	1833,	1769,	1707,	1644,	1582,	1520,
+		1459,	1398,	1338,	1278,	1220,	1162,	1105,	1048,	993,	939,	886,
+		834,	783,	733,	685,	638,	593,	548,	506,	464,	425,	386,
+		350,	315,	282,	250,	220,	193,	166,	142,	120,	99,	    80,
+		64,	    49,	    36,	    25,	    16,	    9,	    4,	    1,	    0,	    1,	    4,
+		9,		16,		25,		36,		49,		64,		80,		99,		120,	142,	166,
+		193,	220,	250,	282,	315,	350,	386,	425,	464,	506,	548,
+		593,	638,	685,	733,	783,	834,	886,	939,	993,	1048,	1105,
+		1162,	1220,	1278,	1338,	1398,	1459,	1520,	1582,	1644,	1707,	1769,
+		1833,	1896,	1959,	2023};
+
+
+
+
 // PUt const before sin look up table
+
+
+
+
+
 int main(void)
 
 {
@@ -119,68 +158,71 @@ __interrupt void Timer_A (void)
 			  Drive_DAC(level);
 			  duty = duty_cycle[duty_sel];
 			  ccro = freq[freq_sel]; //*duty;
-			  CCR0 += ccro;//duty_cycle[duty_sel]);
+			  CCR0 += ccro;//ccro;//duty_cycle[duty_sel]);
 			}
 			else{
 			  level = Voff;
 			  Drive_DAC(level);
 			  duty = 1 - duty_cycle[duty_sel];
 			  ccro = freq[freq_sel]; //*duty;
-			  CCR0 += ccro;//(100-duty_cycle[duty_sel]);
+			  CCR0 += ccro;//ccro;//(100-duty_cycle[duty_sel]);
 			}
 	 }
 
 	// Sawtooth
 	if(wav_sel == 2){
-	  if(count < 50){//limits[freq_sel]) {
-	  	  level += voltage;//ramp[freq_sel];
-	  	  Drive_DAC(level);
-	  	// ccro = freq[freq_sel]; //*duty;
-	  	  CCR0 += ccro_ramp[freq_sel];
-		  count++;
-	  }
-	  else{
-		  level = Voff;
-		  Drive_DAC(level);
-		  CCR0 += ccro_ramp[freq_sel];
-		  count = 0;
-	  }
-
+		  if(count < 50){
+			  level += voltage;
+			  Drive_DAC(level);
+			  CCR0 += ccro_ramp[freq_sel];
+			  count++;
+		  }
+		  else{
+			  level = Voff;
+			  Drive_DAC(level);
+			  CCR0 += ccro_ramp[freq_sel];
+			  count = 0;
+		  }
 	}
+
+	// Sin Wave
     if(wav_sel == 3){
-    	//P1OUT |= BIT6;
+
     }
 
 	 else{
-		 //P1OUT |= BIT0;
+
 	 }
 
 
 }
 #pragma vector=PORT1_VECTOR // Interrupt vector
 __interrupt void Port_1(void){ // ISR
-        // Button 1 pressed
+        // Button 1 pressed - change waveforms
 		if(P1IFG & BIT1){
 			P1IFG &= ~(BIT1);
-			if(wav_sel > 3)
+			if(wav_sel > 2)
 			{
 				wav_sel = 0;
 			}
 			wav_sel++;
+			_delay_cycles(72000); // delay 1ms for debouncing
 		}
-		// Button 2 pressed
+		// Button 2 pressed - change frequency
 		if(P1IFG & BIT2)
 		{
 			P1OUT ^= BIT6;
 			P1IFG &= ~BIT2;
-			if(freq_sel > 4)
+			if(freq_sel > 3)
 			{
-				freq_sel = 0;
+				freq_sel = -1;
+				ccro=0;
 			}
 			freq_sel++;
+			_delay_cycles(72000); // delay 1ms for debouncing
 
 		}
-		// Button 3 pressed
+		// Button 3 pressed - duty cycle change
 		if(P1IFG & BIT3){
 			P1IFG &= ~BIT3;
 			if(duty_sel > 9)
@@ -188,23 +230,9 @@ __interrupt void Port_1(void){ // ISR
 				duty_sel = 0;
 			}
 			duty_sel++;
+			_delay_cycles(72000); // delay 1ms for debouncing
 		}
+		_delay_cycles(72000);
 }
 
 
-void squareWave(){
-	 // Square Wave
-//	if(level == Voff){
-//		  P1OUT ^= BIT0;
-//		  level = Voff +Vpp;
-//		  Drive_DAC(level);
-//		  CCR0 += 20000;
-//
-//	}
-//	else{
-//		  P1OUT ^= BIT6;
-//		  level = Voff;
-//		  Drive_DAC(level);
-//		  CCR0 += 20000;
-//	}
-}
