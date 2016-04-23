@@ -22,7 +22,7 @@
 
 void Drive_DAC(unsigned int level);
 volatile unsigned int level = Voff;
-int wav_sel = 0;
+int wav_sel = 1;
 int duty_sel = 0;
 int freq_sel = 0;
 int Freq = 0;
@@ -34,8 +34,10 @@ int sin_sel = 0;
 
 // Look up Tables
 int freq[5] = {9500,5000,3300,2500,2000}; // 100Hz, 200Hz, 300Hz, 400Hz, 500Hz;  period/SMclk
-double duty_cycle[11] = { .1, .2, .3, .4, .5, .6, .7, .8, .9,  1};
+double duty_cycle[9] = { .1, .2, .3, .4, .5, .6, .7, .8, .9};
 int  ccro_ramp[5]={368, 190, 128, 97, 76}; // CCRO
+int ccro_sin[5]={800,400, 266, 200, 160};
+int sinCount=0;
 const int sin_table[200] = {2087,	2150,	2213,	2277,	2339,	2402,	2464,	2526,	2587,
 		2648,	2708,	2768,	2826,	2884,	2941,	2998,	3053,	3107,	3160,	3212,
 		3263,	3313,	3361,	3408,	3453,	3498,	3540,	3582,	3621,	3660,	3696,
@@ -153,35 +155,26 @@ __interrupt void Timer_A (void)
 {
 	if(wav_sel == 1){
 
-		 if(level == Voff){
-			 if(duty_sel == 0)
-			 {
-				 level = Voff;
-			 }
+
+			 if(level == Voff){
+				  level = Voff +Vpp;
+				  Drive_DAC(level);
+				  duty = duty_cycle[duty_sel];
+				  Freq=freq[freq_sel];
+				  Freq=Freq*duty;
+				  ccro = Freq;
+				  CCR0 += ccro;
+
+				}
 			 else{
-				 level = Voff + Vpp;
-			 }
-
-			  Drive_DAC(level);
-			  duty = duty_cycle[duty_sel];
-			  Freq = freq[freq_sel];
-			  ccro = Freq*duty; //*duty;
-			  CCR0 += ccro;//ccro;//duty_cycle[duty_sel]);
-			}
-			else{
-			  if(duty_sel < 10){
-			  level = Voff;
-
-			  }
-			  else{
-				  level = Vpp;
-			  }
-			  Drive_DAC(level);
-			  duty = 1 - duty_cycle[duty_sel];
-			  Freq = freq[freq_sel];
-			  ccro = Freq*duty; //*duty;
-			  CCR0 += ccro;//ccro;//(100-duty_cycle[duty_sel]);
-			}
+				  level = Voff;
+				  Drive_DAC(level);
+				  duty = 1 - duty_cycle[duty_sel];
+				  Freq=freq[freq_sel];
+				  Freq=Freq*duty;
+				  ccro = Freq;
+				  CCR0 += ccro;
+				}
 	 }
 
 	// Sawtooth
@@ -202,11 +195,14 @@ __interrupt void Timer_A (void)
 
 	// Sin Wave
     if(wav_sel == 3){
-    	if(freq_sel == 0) // 100 Hz
+    	if(sinCount < 199)
     	{
-    		level += sin_table[sin_sel++];
+    		level=sin_table[sinCount];
     		Drive_DAC(level);
-    		CCR0 += 320;
+    		CCR0=ccro_sin[freq_sel];
+    		sinCount++;
+    	}else{
+    		sinCount=0;
     	}
 
     }
@@ -246,10 +242,11 @@ __interrupt void Port_1(void){ // ISR
 			P1IFG &= ~BIT3;
 			if(duty_sel > 9)
 			{
-				duty_sel = -1;
-				//freq_sel = 0;
-				duty = 0;
+				duty_sel = 0;
 				ccro = 0;
+				duty=0;
+				Freq=0;
+				freq_sel=0;
 			}
 			else{
 				duty_sel++;
