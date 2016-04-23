@@ -1,4 +1,3 @@
-
 /*
  * Project 2: Function Generator
  * Proffesor Gerfen; CPE329-01
@@ -26,17 +25,18 @@ volatile unsigned int level = Voff;
 int wav_sel = 0;
 int duty_sel = 0;
 int freq_sel = 0;
+int Freq = 0;
 int count = 0;
 int ccro = 0;
 double duty = 0.0;
-
+int sin_sel = 0;
 
 
 // Look up Tables
 int freq[5] = {9500,5000,3300,2500,2000}; // 100Hz, 200Hz, 300Hz, 400Hz, 500Hz;  period/SMclk
-double duty_cycle[11] = {0,.1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0};
+double duty_cycle[11] = { .1, .2, .3, .4, .5, .6, .7, .8, .9,  1};
 int  ccro_ramp[5]={368, 190, 128, 97, 76}; // CCRO
-const int sin_table[201] = {2087,	2150,	2213,	2277,	2339,	2402,	2464,	2526,	2587,
+const int sin_table[200] = {2087,	2150,	2213,	2277,	2339,	2402,	2464,	2526,	2587,
 		2648,	2708,	2768,	2826,	2884,	2941,	2998,	3053,	3107,	3160,	3212,
 		3263,	3313,	3361,	3408,	3453,	3498,	3540,	3582,	3621,	3660,	3696,
 		3731,	3764,	3796,	3826,	3853,	3880,	3904,	3926,	3947,	3966,	3982,
@@ -154,17 +154,32 @@ __interrupt void Timer_A (void)
 	if(wav_sel == 1){
 
 		 if(level == Voff){
-			  level = Voff +Vpp;
+			 if(duty_sel == 0)
+			 {
+				 level = Voff;
+			 }
+			 else{
+				 level = Voff + Vpp;
+			 }
+
 			  Drive_DAC(level);
 			  duty = duty_cycle[duty_sel];
-			  ccro = freq[freq_sel]; //*duty;
+			  Freq = freq[freq_sel];
+			  ccro = Freq*duty; //*duty;
 			  CCR0 += ccro;//ccro;//duty_cycle[duty_sel]);
 			}
 			else{
+			  if(duty_sel < 10){
 			  level = Voff;
+
+			  }
+			  else{
+				  level = Vpp;
+			  }
 			  Drive_DAC(level);
 			  duty = 1 - duty_cycle[duty_sel];
-			  ccro = freq[freq_sel]; //*duty;
+			  Freq = freq[freq_sel];
+			  ccro = Freq*duty; //*duty;
 			  CCR0 += ccro;//ccro;//(100-duty_cycle[duty_sel]);
 			}
 	 }
@@ -187,12 +202,16 @@ __interrupt void Timer_A (void)
 
 	// Sin Wave
     if(wav_sel == 3){
+    	if(freq_sel == 0) // 100 Hz
+    	{
+    		level += sin_table[sin_sel++];
+    		Drive_DAC(level);
+    		CCR0 += 320;
+    	}
 
     }
 
-	 else{
 
-	 }
 
 
 }
@@ -227,12 +246,17 @@ __interrupt void Port_1(void){ // ISR
 			P1IFG &= ~BIT3;
 			if(duty_sel > 9)
 			{
-				duty_sel = 0;
+				duty_sel = -1;
+				//freq_sel = 0;
+				duty = 0;
+				ccro = 0;
 			}
-			duty_sel++;
+			else{
+				duty_sel++;
+			}
+
 			_delay_cycles(72000); // delay 1ms for debouncing
 		}
-		_delay_cycles(72000);
+		//_delay_cycles(90000);
 }
-
 
