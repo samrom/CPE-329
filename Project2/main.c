@@ -28,13 +28,15 @@ int freq_sel = 0;
 int Freq = 0;
 int count = 0;
 int ccro = 0;
-double duty = 0.0;
 int sin_sel = 0;
+
+double duty = 0.5;
+
 
 
 // Look up Tables
 const unsigned int freq[5] = {40000,20000,13333,10000,8000}; //  period/SMclk
-const unsigned int freq_tenths[5]={20000, 10000, 6666, 5000, 4000    };
+const unsigned int freq_sq[5]={20000, 10000, 6666, 5000, 4000    };
 
 double duty_cycle[9] = { .1, .2, .3, .4, .5, .6, .7, .8, .9};
 int  ccro_ramp[5]={780, 380, 253, 195, 157}; // CCRO
@@ -153,7 +155,7 @@ void Drive_DAC(unsigned int level){
 		       (DAC_Word & 0x00FF);  // Transmit lower byte to DAC
 
   while (!(IFG2 & UCB0TXIFG));       // USCI_A0 TX buffer ready?
-  __delay_cycles(4);               // Delay 20 16 MHz SMCLK periods
+  __delay_cycles(40);               // Delay 20 16 MHz SMCLK periods
                                      // (12.5 us) to allow SIMO to complete
   P1OUT |= BIT4;                     // Set P1.4   (drive /CS high on DAC)
   return;
@@ -167,23 +169,28 @@ __interrupt void Timer_A (void)
 
 			 if(level == Voff){
 				  level = Voff +Vpp;
-				  Drive_DAC(level);
+				  ccro=0;
+				  Freq=0;
 				  duty = duty_cycle[duty_sel];
-				  Freq=freq_tenths[freq_sel];
-				  //Freq=Freq*duty;
+				  Freq=freq[freq_sel]*duty;
+				  _delay_cycles(427);
 				  ccro = Freq;
-				  CCR0 += ccro;
+				  Drive_DAC(level);
+				  CCR0 += ccro;//12000;
 
 				}
 			 else{
 				  level = Voff;
-				  Drive_DAC(level);
+				  ccro=0;
+				  Freq=0;
 				  duty = 1 - duty_cycle[duty_sel];
-				  Freq=freq_tenths[freq_sel];
-				  //Freq=Freq*duty;
+				  Freq=freq[freq_sel]*duty;
+				  _delay_cycles(427);
 				  ccro = Freq;
+				  Drive_DAC(level);
 				  CCR0 += ccro;
 				}
+
 	 }
 
 	// Sawtooth
@@ -207,13 +214,11 @@ __interrupt void Timer_A (void)
     	if(sinCount >= 198)
     	{
     		sinCount=0;
-    		//CCR0=0;
     	}
 		level=sin_table[sinCount];
 		CCR0+=ccro_sin[freq_sel];
 		Drive_DAC(level);
 		sinCount+=sinStep[freq_sel];
-		// __delay_cycles(200);
     }
 
 
@@ -230,37 +235,33 @@ __interrupt void Port_1(void){ // ISR
 				wav_sel = 0;
 			}
 			wav_sel++;
-		//	_delay_cycles(72000); // delay 1ms for debouncing
 		}
 		// Button 2 pressed - change frequency
 		if(P1IFG & BIT2)
 		{
-			P1OUT ^= BIT6;
 			P1IFG &= ~BIT2;
 			if(freq_sel > 3)
 			{
 				freq_sel = -1;
-				//ccro=0;
 			}
 			freq_sel++;
-			_delay_cycles(72000); // delay 1ms for debouncing
+			_delay_cycles(4000); // delay 1ms for debouncing
 
 		}
 		// Button 3 pressed - duty cycle change
 		if(P1IFG & BIT3){
 			P1IFG &= ~BIT3;
-			if(duty_sel > 9)
+			if(duty_sel < 9)
 			{
-				duty_sel = 0;
-				//ccro = 0;
-				//duty=0;
-				//Freq=0;
-				//freq_sel=0;
+				duty_sel++;
+
 			}
 			else{
-				duty_sel++;
+				duty_sel = 0;
+				Freq = 0;
 			}
 
+			_delay_cycles(40000); // 1ms
 
 		}
 }
