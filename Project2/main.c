@@ -33,12 +33,15 @@ int sin_sel = 0;
 
 
 // Look up Tables
-int freq[5] = {9500,5000,3300,2500,2000}; // 100Hz, 200Hz, 300Hz, 400Hz, 500Hz;  period/SMclk
+const unsigned int freq[5] = {40000,20000,13333,10000,8000}; //  period/SMclk
+const unsigned int freq_tenths[5]={20000, 10000, 6666, 5000, 4000    };
+
 double duty_cycle[9] = { .1, .2, .3, .4, .5, .6, .7, .8, .9};
-int  ccro_ramp[5]={368, 190, 128, 97, 76}; // CCRO
-volatile int ccro_sin[5]={2000,4000, 2600, 2000, 160};
-int tempArray[5]={800, 400, 267,200, 160};
-int sinCount=0;
+int  ccro_ramp[5]={780, 380, 253, 195, 157}; // CCRO
+volatile int ccro_sin[5]={200,100, 66, 50, 80};
+unsigned int tempArray[5]={800, 400, 267, 200, 160};
+int sinStep[5] ={1, 1, 1, 1, 2};
+int sinCount = 0;
 
 const unsigned int sin_table[200]={2057, 2120,	2183,	2247,	2309,	2372,	2434,	2496,	2557,
 		2618,	2678,	2738,	2796,	2854,	2911,	2968,	3023,	3077,	3130,	3182,
@@ -59,12 +62,6 @@ const unsigned int sin_table[200]={2057, 2120,	2183,	2247,	2309,	2372,	2434,	249
 		608	,    655,	  703,	753,     804,	 856,	909,	 963,	1018,	1075,	1132,
 		1190,	1248,	1308,	1368,	1429,	1490,	1552,	1614,	1677,	1739,	1803,
 		1866,	1929,	1993};
-
-const unsigned char wave[32] = {			// Wave array, preset to values of sine
-	128, 140, 152, 164, 173, 181, 187, 191,
-	192, 191, 187, 181, 173, 164, 152, 140,
-	128, 116, 104, 92, 83, 75, 69, 65,
-	64, 65, 69, 75, 83, 92, 104, 116 };
 
 
 // PUt const before sin look up table
@@ -89,7 +86,7 @@ int main(void)
   CCTL0 = CCIE;                      // CCR0 interrupt enabled
   CCR0 = 110; //10000
   // SMCLK, continuous mode, div 1
-  TACTL = TASSEL_2 + ID_0+ MC_2;
+  TACTL = TASSEL_2 + ID_2+ MC_2;
 
   // Init Ports
   P1DIR |= BIT4 +BIT0 + BIT6;                     // Will use BIT4 to activate /CE on the DAC
@@ -112,14 +109,14 @@ int main(void)
   // Sets SMCLK divider to 16,
   // hence making SPI SCLK equal
   // to SMCLK/1 = 16MHz
-//  UCB0BR0 |= 0x01;             // (low divider byte) 0001 0000
-//  UCB0BR1 |= 0x00;             // (high divider byte)
+  UCB0BR0 |= 0x00;             // (low divider byte) 0001 0000
+  UCB0BR1 |= 0x00;             // (high divider byte)
 
 
  // UCB0CTL1 &= ~UCSWRST;        // **Initialize USCI state machine**
                                // SPI now Waiting for something to
                                // be placed in TXBUF.
-  	 P1IE  |= BIT3 + BIT2 + BIT1; // Enable interrupts for P1.3 and P1.0
+  	 P1IE  |= BIT3 + BIT2 + BIT1; // Enable interrupts for P1.3, P1.2, & P1.0
  	 P1REN |= BIT3 + BIT2 + BIT1; // Add int. pullup/pulldown resistor to P1.3 and P1.0
  	 P1OUT |= BIT3 + BIT2 + BIT1; // Config int. resistors for pullup operation
  	 P1IES |= BIT3 + BIT2 + BIT1; // Select high to low edge Interrupt on P1.3 and P1.0
@@ -156,7 +153,7 @@ void Drive_DAC(unsigned int level){
 		       (DAC_Word & 0x00FF);  // Transmit lower byte to DAC
 
   while (!(IFG2 & UCB0TXIFG));       // USCI_A0 TX buffer ready?
-  __delay_cycles(200);               // Delay 20 16 MHz SMCLK periods
+  __delay_cycles(4);               // Delay 20 16 MHz SMCLK periods
                                      // (12.5 us) to allow SIMO to complete
   P1OUT |= BIT4;                     // Set P1.4   (drive /CS high on DAC)
   return;
@@ -172,8 +169,8 @@ __interrupt void Timer_A (void)
 				  level = Voff +Vpp;
 				  Drive_DAC(level);
 				  duty = duty_cycle[duty_sel];
-				  Freq=freq[freq_sel];
-				  Freq=Freq*duty;
+				  Freq=freq_tenths[freq_sel];
+				  //Freq=Freq*duty;
 				  ccro = Freq;
 				  CCR0 += ccro;
 
@@ -182,8 +179,8 @@ __interrupt void Timer_A (void)
 				  level = Voff;
 				  Drive_DAC(level);
 				  duty = 1 - duty_cycle[duty_sel];
-				  Freq=freq[freq_sel];
-				  Freq=Freq*duty;
+				  Freq=freq_tenths[freq_sel];
+				  //Freq=Freq*duty;
 				  ccro = Freq;
 				  CCR0 += ccro;
 				}
@@ -194,13 +191,13 @@ __interrupt void Timer_A (void)
 		  if(count < 50){
 			  level += voltage;
 			  Drive_DAC(level);
-			  CCR0 += ccro_ramp[freq_sel];
+			  CCR0 +=ccro_ramp[freq_sel];
 			  count++;
 		  }
 		  else{
 			  level = Voff;
 			  Drive_DAC(level);
-			  CCR0 += ccro_ramp[freq_sel];
+			  CCR0 +=ccro_ramp[freq_sel];
 			  count = 0;
 		  }
 	}
@@ -210,12 +207,12 @@ __interrupt void Timer_A (void)
     	if(sinCount >= 198)
     	{
     		sinCount=0;
+    		//CCR0=0;
     	}
 		level=sin_table[sinCount];
-		//Drive_DAC(level);
-		CCR0+=820;//si[freq_sel];
+		CCR0+=ccro_sin[freq_sel];
 		Drive_DAC(level);
-		sinCount+=1;
+		sinCount+=sinStep[freq_sel];
 		// __delay_cycles(200);
     }
 
@@ -243,10 +240,10 @@ __interrupt void Port_1(void){ // ISR
 			if(freq_sel > 3)
 			{
 				freq_sel = -1;
-				ccro=0;
+				//ccro=0;
 			}
 			freq_sel++;
-		//	_delay_cycles(72000); // delay 1ms for debouncing
+			_delay_cycles(72000); // delay 1ms for debouncing
 
 		}
 		// Button 3 pressed - duty cycle change
@@ -255,18 +252,16 @@ __interrupt void Port_1(void){ // ISR
 			if(duty_sel > 9)
 			{
 				duty_sel = 0;
-				ccro = 0;
-				duty=0;
-				Freq=0;
-				freq_sel=0;
+				//ccro = 0;
+				//duty=0;
+				//Freq=0;
+				//freq_sel=0;
 			}
 			else{
 				duty_sel++;
 			}
 
-			//_delay_cycles(72000); // delay 1ms for debouncing
-		}
-		//_delay_cycles(90000);
-}
 
+		}
+}
 
