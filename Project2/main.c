@@ -23,20 +23,20 @@
 void Drive_DAC(unsigned int level);
 volatile unsigned int level = Voff;
 int wav_sel = 1;
-int duty_sel = 0;
-int freq_sel = 0;
-int Freq = 0;
+volatile int duty_sel = 0;
+volatile int freq_sel = 0;
+volatile int Freq, Freq_high, Freq_low = 0;
 int count = 0;
 int ccro = 0;
 int sin_sel = 0;
 
-double duty = 0.5;
-
+ double duty_low = 0.5;
+ double duty_high = 0.5;
 
 
 // Look up Tables
 const unsigned int freq[5] = {40000,20000,13333,10000,8000}; //  period/SMclk
-const unsigned int freq_sq[5]={20000, 10000, 6666, 5000, 4000    };
+const unsigned int freq_sq[5]={4000, 2000, 1333, 1000, 800};
 
 double duty_cycle[9] = { .1, .2, .3, .4, .5, .6, .7, .8, .9};
 int  ccro_ramp[5]={780, 380, 253, 195, 157}; // CCRO
@@ -91,7 +91,7 @@ int main(void)
   TACTL = TASSEL_2 + ID_2+ MC_2;
 
   // Init Ports
-  P1DIR |= BIT4 +BIT0 + BIT6;                     // Will use BIT4 to activate /CE on the DAC
+  P1DIR |= BIT4 + BIT6;                     // Will use BIT4 to activate /CE on the DAC
 
   P1SEL  = BIT7 + BIT5;  // These two lines dedicate P1.7 and P1.5
   P1SEL2 = BIT7 + BIT5;   // for UCB0SIMO and UCB0CLK respectively
@@ -118,7 +118,7 @@ int main(void)
  // UCB0CTL1 &= ~UCSWRST;        // **Initialize USCI state machine**
                                // SPI now Waiting for something to
                                // be placed in TXBUF.
-  	 P1IE  |= BIT3 + BIT2 + BIT1; // Enable interrupts for P1.3, P1.2, & P1.0
+  	 P1IE  |= BIT3 + BIT2 + BIT1; // Enable interrupts for P1.3, P1.2, & P1.1
  	 P1REN |= BIT3 + BIT2 + BIT1; // Add int. pullup/pulldown resistor to P1.3 and P1.0
  	 P1OUT |= BIT3 + BIT2 + BIT1; // Config int. resistors for pullup operation
  	 P1IES |= BIT3 + BIT2 + BIT1; // Select high to low edge Interrupt on P1.3 and P1.0
@@ -169,24 +169,19 @@ __interrupt void Timer_A (void)
 
 			 if(level == Voff){
 				  level = Voff +Vpp;
-				  ccro=0;
-				  Freq=0;
-				  duty = duty_cycle[duty_sel];
-				  Freq=freq[freq_sel]*duty;
-				  _delay_cycles(427);
-				  ccro = Freq;
+				  ccro = Freq_high;
+
+			//	 _delay_cycles(800); // 200us
+				  Freq_high=freq_sq[freq_sel]*(duty_sel+1);
+
 				  Drive_DAC(level);
-				  CCR0 += ccro;//12000;
+				  CCR0 += ccro;
 
 				}
 			 else{
 				  level = Voff;
-				  ccro=0;
-				  Freq=0;
-				  duty = 1 - duty_cycle[duty_sel];
-				  Freq=freq[freq_sel]*duty;
-				  _delay_cycles(427);
-				  ccro = Freq;
+				  Freq_low=freq[freq_sel]-Freq_high;
+				  ccro = Freq_low;
 				  Drive_DAC(level);
 				  CCR0 += ccro;
 				}
@@ -229,39 +224,50 @@ __interrupt void Timer_A (void)
 __interrupt void Port_1(void){ // ISR
         // Button 1 pressed - change waveforms
 		if(P1IFG & BIT1){
-			P1IFG &= ~(BIT1);
+
 			if(wav_sel > 2)
 			{
 				wav_sel = 0;
 			}
 			wav_sel++;
+			P1IFG &= ~(BIT1);
 		}
 		// Button 2 pressed - change frequency
-		if(P1IFG & BIT2)
+		else if(P1IFG & BIT2)
 		{
-			P1IFG &= ~BIT2;
+
 			if(freq_sel > 3)
 			{
 				freq_sel = -1;
 			}
 			freq_sel++;
-			_delay_cycles(4000); // delay 1ms for debouncing
 
+		    Freq_high=freq_sq[freq_sel]*(duty_sel+1);
+		    Freq_low=freq[freq_sel]-Freq_high;
+			_delay_cycles(4000); // delay 1ms for debouncing
+			P1IFG &= ~BIT2;
 		}
 		// Button 3 pressed - duty cycle change
-		if(P1IFG & BIT3){
-			P1IFG &= ~BIT3;
-			if(duty_sel < 9)
+		else if(P1IFG & BIT3){
+
+			if(duty_sel >= 8)
 			{
-				duty_sel++;
+				duty_sel = -1;
+				Freq_low = Freq_high = 0;
+				duty_low = duty_high = 0;
+				_delay_cycles(800);
 
 			}
-			else{
-				duty_sel = 0;
-				Freq = 0;
-			}
 
-			_delay_cycles(40000); // 1ms
+		//	_delay_cycles(800); // 200us
+			++duty_sel;
+			 Freq_high=freq_sq[freq_sel]*(duty_sel+1);
+			Freq_low=freq[freq_sel]-Freq_high;
+//			duty_high = duty_cycle[duty_sel];
+//			duty_low = 1 - duty_cycle[duty_sel];
+
+		//	_delay_cycles(400000); // 10ms
+			P1IFG &= ~BIT3;
 
 		}
 }
