@@ -142,7 +142,7 @@ void storeCap()
 	CACTL2 &= ~(P2CA4); // input for CA0
 	CACTL2 |= P2CA0; // input for CA0
 
-	_delay_cycles(16000); // 100us charge time
+	_delay_cycles(16000); // 1ms charge time
 
 	// Step 3 - Close Vin and switch to Ramp input: P2SEL changes and open TG
 	CACTL2 &= ~CASHORT; // close TG
