@@ -1,0 +1,181 @@
+/*
+*  Project 3 - ADC Fun!
+*  Professor Gerfen: May 9th, 2016
+*  Authors: Samantha Romano and Edith Rodriguez
+*  youtube: 
+*/
+#include <msp430g2553.h>
+
+
+#define P1_0    BIT0
+#define P1_1    BIT1
+#define P1_2    BIT2
+#define P1_3    BIT3
+#define P1_4    BIT4
+#define P1_5    BIT5
+#define P1_6    BIT6
+#define P1_7    BIT7
+
+#define P2_0    BIT0
+#define P2_1    BIT1
+#define P2_2    BIT2
+#define P2_3    BIT3
+#define P2_4    BIT4
+#define P2_5    BIT5
+#define P2_6    BIT6
+#define P2_7    BIT7
+
+
+
+/*  Function Definitions  */
+
+void countingRamp(void);
+void storeCap();
+void Drive_DAC(unsigned int level);
+int binarySearch(void);
+
+/*  Global Variables  */
+
+char  index = 0x00;
+int storeFirst=0x00;
+unsigned int level = 0xFF;
+
+void main(void) {
+
+	WDTCTL = WDTPW + WDTHOLD;	// disable watchdog
+
+	// 16MHz initilization
+	if (CALBC1_16MHZ==0xFF) 		    // If calibration constant erased
+	{
+		while(1);					    // do not load, trap CPU!!
+	}
+	DCOCTL = 0;					    // Select lowest DCOx and MODx settings
+	BCSCTL1 = CALBC1_16MHZ;		    // Set range
+	DCOCTL = CALDCO_16MHZ;			// Set DCO step + modulation
+
+	// Port Initilization
+    P1DIR |= P1_3 + P1_4 + P1_5 + P1_6 + P1_7;   // set CA0, SDI, CS, and CAOUT as an output.
+    P1DIR &= ~(P1_1+P1_2); //input for wavegen
+    P2DIR |= P2_0 + P2_1 + P2_2 + P2_3 + P2_4 + P2_5 + P2_6 + P2_7;    // set Resistor Network Ports			                  
+																	   // set CA1 and CA2 as an input
+
+    P2SEL &= ~(P2_7+P2_6);  // This enables the user to output to P2.6 and P2.7 i
+    P2SEL2 &= ~(P2_7+P2_6);
+
+    P2OUT=0;
+    // end Port Initlization
+
+//    SPI Initilization (from Project 2)
+
+    P1SEL  |= BIT7 + BIT5;   // These two lines dedicate P1_7 and P1_5
+    P1SEL2 |= BIT7 + BIT5;   // for UCB0SIMO and UCB0CLK respectively
+
+//    // SPI Setup
+//    // clock inactive state = low,
+//    // MSB first, 8-bit SPI master,
+//    // 4-pin active Low STE, synchronous
+//    //
+//    // 4-bit mode disabled for now
+    UCB0CTL0 |= UCCKPL + UCMSB + UCMST + /* UCMODE_2 */ + UCSYNC;
+
+
+    UCB0CTL1 |= UCSSEL_2;             // UCB0 will use SMCLK as the basis for
+
+    UCB0BR0 |= 0x01;             // (low divider byte) 0000 0001
+    UCB0BR1 |= 0x00;             // (high divider byte)
+    // the SPI bit clock
+    UCB0CTL1 &= ~UCSWRST;             // **Initialize USCI state machine**
+     	                              //   SPI now Waiting for something to
+     	                               //  be placed in TXBUF.
+   // End of SPI Initilization
+
+
+	P1DIR |= P1_6 + P1_4; // LEDS
+	CAPD |= CAPD1+CAPD2+CAPD3; // to avoid parasitic current from digial I/O. 
+	__enable_interrupt();
+
+	while(1){
+		storeCap();
+		P1OUT &= ~(BIT6+BIT0);
+		countingRamp();
+		_delay_cycles(50);
+		Drive_DAC(level<<4); // DAC is a 12 bit and we bit 
+							 // shift because input is 8 bit. 
+	}
+} // main
+
+
+// If CAOUT goes high, the program enters this interrupt
+// and stores the value in level to be inputted into the DAC. 
+#pragma vector = COMPARATORA_VECTOR
+__interrupt void COMPA_ISR(void){
+	CACTL1 &= ~(CAIE);
+	level = index;
+} // COMPA_ISR
+
+
+// The purpose of this function is to run a constant linear progression
+// from 0 to 255 that uses Port 2.  
+void countingRamp(void){
+	CACTL1 = CAON + CAREF_0 + CAIE+ CAIES; // turn comparator on, external reference, e
+										   // enable interrupt, falling edge
+	
+	CACTL2 = P2CA4 + P2CA2 + CAF;         // Select CA0 and CA1, enable filter
+	
+	for(index = 0; index!=255; index++){
+		 P2OUT = index;
+		_delay_cycles(20);
+	}
+}
+
+// The purpose of this function is to allow the Function Generator analog input 
+// to be stored in the capacitor. It flows from MUX2 into MUX1 using bit lines:
+// CA0 and CA1 through shorting a transmission gate and then reopening to send 
+// the analog and ramp to the comparator. 
+void storeCap()
+{
+    // Step 1 -  Select correct bit lines. 
+	CACTL2 &= ~(P2CA2+P2CA3); // inputs for CA1
+	CACTL2 |= P2CA1; // inputs for CA1 and short
+	// Step 2 - Short transmission gate and store charge on capacitor. 
+	CACTL2  |= CASHORT;
+	CACTL2 &= ~(P2CA4); // input for CA0
+	CACTL2 |= P2CA0; // input for CA0
+
+	_delay_cycles(16000); // 100us charge time
+
+	// Step 3 - Close Vin and switch to Ramp input: P2SEL changes and open TG
+	CACTL2 &= ~CASHORT; // close TG
+	CACTL2 &= ~(P2CA1 + P2CA3); // for CA2 and open TG
+	CACTL2 |= P2CA2;     // select CA2 for P2OUT into Mux
+
+	// Step 4 - Turn on Comparator and select CAEX mux value
+	CACTL1 &= ~CAEX;     // select CAEX for mux into comparator
+}
+
+// Converts a digital value into a voltage. 
+void Drive_DAC(unsigned int level){
+  unsigned int DAC_Word = 0;
+
+  DAC_Word = (0x3000) | (level & 0x0FFF);   // 0x1000 sets DAC for Write
+                                            // to DAC, Gain = 1, /SHDN = 1
+                                            // and put 12-bit level value
+                                            // in low 12 bits.
+
+  P1OUT &= ~BIT4;                    // Clear P1_4 (drive /CS low on DAC)
+                                     // Using a port output to do this for now
+
+  UCB0TXBUF = (DAC_Word >> 8);       // Shift upper byte of DAC_Word
+                                     // 8-bits to right
+
+  while (!(IFG2 & UCB0TXIFG));       // USCI_A0 TX buffer ready?
+
+  UCB0TXBUF = (unsigned char)
+		       (DAC_Word & 0x00FF);  // Transmit lower byte to DAC
+
+  while (!(IFG2 & UCB0TXIFG));       // USCI_A0 TX buffer ready?
+  __delay_cycles(40);               // Delay 20 16 MHz SMCLK periods
+                                     // (12.5 us) to allow SIMO to complete
+  P1OUT |= BIT4;                     // Set P1_4   (drive /CS high on DAC)
+  return;
+}
