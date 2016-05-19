@@ -1,0 +1,95 @@
+#include <msp430g2553.h>
+
+#ifndef TIMER0_A1_VECTOR
+#define TIMER0_A1_VECTOR TIMERA1_VECTOR
+#define TIMER0_A0_VECTOR TIMERA0_VECTOR
+#endif
+volatile long tempRaw;
+
+
+void FaultRoutine(void);
+//void verifySensor(long sensorVal);
+void main(void)
+{
+	 WDTCTL = WDTPW + WDTHOLD; //stop watchdog timer
+	  P1DIR = 0x41;    //p1.0 and 6 outputs
+	  P1OUT = 0;   // led off
+
+	  if (CALBC1_1MHZ ==0xFF || CALDCO_1MHZ == 0xFF)
+	   FaultRoutine();   // If cal data is erased
+	  	  	  	  	  	  // run FaultRoutine()
+	  BCSCTL1 = CALBC1_1MHZ; //setRange
+	  DCOCTL = CALDCO_1MHZ;    //Set DCO step+modulation
+
+	  //ports
+	  	  P1DIR &= ~BIT1; //Bit1 set as input for A1
+
+
+	  BCSCTL3 |= LFXT1S_2;  // LFXT1 = VLO
+	  IFG1 &= ~OFIFG;   //clear oscillation flag
+	  BCSCTL2 |= SELM_0 + DIVM_3 + DIVS_3; // MCLK = DCO/8
+
+
+	  while(1){
+
+		ADC10CTL1 = INCH_1 + ADC10DIV_0; // A1 and ADC10CLK divide by zero
+		 ADC10CTL0 = SREF_0 + ADC10SHT_3 + REFON + ADC10ON; //V+ is Vcc and V- is VSS  no interrupta enabled
+		_delay_cycles(5);      //Wait for ADC Ref to Settle, bases on 40microsecond wait
+		 ADC10CTL0 |= ENC + ADC10SC;    //Sampling & conversion start
+
+		 P1OUT = 0x40;   //green LED off
+		  _delay_cycles(100); // 13 ADCCLK cycles  before read conversion result
+
+		    ADC10CTL0 &= ~ENC; //needs to be off to change REF bit
+		    ADC10CTL0 &= ~(REFON + ADC10ON);
+		    tempRaw = ADC10MEM;
+		   // verifySensor(tempRaw);
+//		    if(tempRaw > 981){
+//		           P1OUT |=0x01;
+//		           _delay_cycles(125000);
+//		      }
+//		      if(tempRaw > 651 && tempRaw < 705 ){
+//
+//		      P1OUT |= 0x01;
+//		      }
+//		     if(tempRaw <391){
+//		    	  P1OUT &= ~0x01;
+//		      }
+
+
+
+
+
+		    P1OUT = 0;      //green LED OFF
+		 _delay_cycles(125000);
+	  }
+}
+
+
+//declarationsFunction
+//void verifySensor(long sensorVal){
+//  if(sensorVal > 981){
+//       P1OUT |=0x01;
+//       _delay_cycles(125000);
+//  }
+//  if(sensorVal > 651 && sensorVal < 705 ){
+//
+//  P1OUT |= 0x01;
+//  }
+// if(sensorVal <391){
+//	  P1OUT &= ~0x01;
+//  }
+//
+//}
+
+void FaultRoutine(void){
+	//P1OUT =0x01;    //red LED on
+	while(1); //TRAP
+}
+
+
+
+
+
+
+
