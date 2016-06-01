@@ -48,7 +48,6 @@ void initialPosition(void)
 }
 
 
-
 int main(void) {
     WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
     P1DIR |= BIT5+BIT4+BIT0;
