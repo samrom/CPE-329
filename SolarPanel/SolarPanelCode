@@ -3,40 +3,101 @@
 /*
  * main.c
  */
+
+int init = 1;
+int holds = 2;
+int steps = 3;
+int condition = 0;
+int i = 0;
+
+void moveDegree(void)
+{
+	int i;
+	for(i=0; i<4; i++)
+	{
+		P1OUT |= BIT5;
+		__delay_cycles(1000);
+		P1OUT &= ~BIT5;
+		__delay_cycles(1000);
+
+	}
+	P1OUT |= BIT5;
+//	condition = holds;
+}
 void hold()
 {
-	while(1){
 	P1OUT |=BIT5;
-	__delay_cycles(100000);
+	for(i=0; i<11; i++)
+	{
+	__delay_cycles(1000000);
 	}
+//	condition = steps;
 }
 void initialPosition(void)
 {
 	int i;
-	for(i=0;i<300;i++)
+
+	for(i=0;i<100;i++)
 	{
 	   P1OUT |=BIT5;
 		__delay_cycles(1000);
 		P1OUT &= ~BIT5;
 		__delay_cycles(1000);
 	}
+	//condition = holds;
 }
+
 
 
 int main(void) {
     WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
-    WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
-
-    P1DIR |= BIT5+BIT4;
-
+    P1DIR |= BIT5+BIT4+BIT0;
+    condition = 1;
 	while(1)
 	{
-		int i = 0;
-		for(i=0; i<20;i++)
+		P1OUT &= ~BIT0;
+		switch(condition)
 		{
-		initialPosition();
+		case 1:
+			initialPosition();
+			P1OUT |= BIT5;
+			break;
+		case 2:
+			hold();
+			P1OUT = BIT5;
+			break;
+		case 3:
+			moveDegree();
+			P1OUT |= BIT5;
+			break;
+		default:
+			hold();
+			P1OUT |= BIT5;
+			break;
 		}
-		hold();
+		// Check Photocells
+		P1OUT |= BIT0;
+		__delay_cycles(10000);
+		if(condition == holds)
+		{
+			condition = steps;
+		}
+		else
+		{
+			condition = holds;
+		}
+//		else{
+//			condition = holds;
+//		}
+
+//			int i = 0;
+//			for(i=0; i<20;i++)
+//			{
+//			initialPosition();
+//			}
+//			hold();
+//			moveDegree();
+//			hold();
 	}
 	return 0;
 }
