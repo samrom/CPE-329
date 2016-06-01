@@ -1,0 +1,59 @@
+/*
+ * MSP430G2253 ADC_3GPIO v1.c
+ *
+ *  Created on: 20/09/2013
+ *  	Author: Ant Scranney
+ */
+#include <msp430g2553.h>
+// Global Variables
+unsigned int adc[2] = {0};	// This will hold the x,y and z axis values
+unsigned int PhotoCellOne = 0;
+unsigned int PhotoCellTwo = 0;
+//unsigned int Z_Axis = 0;
+//Function Prototypes
+void Setup_HW(void);		// Setup watchdog timer, clockc, ADC ports
+void Read_Acc(void);	// This function reads the ADC and stores the x, y and z values
+
+int main(void)
+{
+  Setup_HW();
+
+
+  P1DIR|= BIT5+BIT4;
+
+
+
+  while (1)
+  {
+		Read_Acc();	// This function reads the ADC and stores the x, y and z values
+		P1OUT |=
+  }
+}
+
+// ADC10 interrupt service routine
+#pragma vector=ADC10_VECTOR
+__interrupt void ADC10_ISR(void)
+{
+  __bic_SR_register_on_exit(CPUOFF);        // Clear CPUOFF bit from 0(SR) exit low power mode before returning to main
+}
+
+void Setup_HW(void)
+{
+	  WDTCTL = WDTPW + WDTHOLD;                 // Stop WDT
+	  ADC10CTL1 = INCH_2 + CONSEQ_1;            // use channel A2/A1, sequence of channels single sequence, BEGINS SAMPL AT A2 DOWN TO A1
+	  ADC10CTL0 = ADC10SHT_2 + MSC + ADC10ON + ADC10IE; // sample & hold 16xADCCloks, first rising edge and continue sample and convert after completion, enable interrupts
+	  ADC10DTC1 = 0x02;                         // 2 conversions
+	  ADC10AE0 |= BIT1 +BIT2;                         // Disable digital I/O on P1.1 to P1.2
+}
+void Read_Acc(void)
+{
+    ADC10CTL0 &= ~ENC;                      // DISABLE CONVERSIONS
+    while (ADC10CTL1 & BUSY);               // Wait if ADC10 core is active
+    ADC10SA = (unsigned int)adc;			// Copies data in ADC10SA to unsigned int adc array
+    ADC10CTL0 |= ENC + ADC10SC;             // Sampling and conversion start
+
+    PhotoCellOne = adc[0];						// adc array 0 copied to the variable PhotoCellOne
+    PhotoCellTwo = adc[1];						// adc array 1 copied to the variable PhotoCellTwo
+   // Z_Axis = adc[2];						// adc array 2 copied to the variable Z_Axis
+    __bis_SR_register(CPUOFF + GIE);        // Enter LPM0, ADC10_ISR will force exit
+}
