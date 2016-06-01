@@ -1,0 +1,42 @@
+#include <msp430.h> 
+
+/*
+ * main.c
+ */
+void hold()
+{
+	while(1){
+	P1OUT |=BIT5;
+	__delay_cycles(100000);
+	}
+}
+void initialPosition(void)
+{
+	int i;
+	for(i=0;i<300;i++)
+	{
+	   P1OUT |=BIT5;
+		__delay_cycles(1000);
+		P1OUT &= ~BIT5;
+		__delay_cycles(1000);
+	}
+}
+
+
+int main(void) {
+    WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
+    WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
+
+    P1DIR |= BIT5+BIT4;
+
+	while(1)
+	{
+		int i = 0;
+		for(i=0; i<20;i++)
+		{
+		initialPosition();
+		}
+		hold();
+	}
+	return 0;
+}
