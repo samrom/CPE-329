@@ -1,0 +1,213 @@
+#include <msp430.h> 
+// Global Variables
+volatile unsigned int adc[2] = {0};	// This will hold the x,y and z axis values
+volatile unsigned int PhotoCellOne = 0;
+volatile unsigned int PhotoCellTwo = 0;
+//unsigned int Z_Axis = 0;
+//Function Prototypes
+void Setup_HW(void);		// Setup watchdog timer, clockc, ADC ports
+void Read_Acc(void);	// This function reads the ADC and stores the x, y and z values
+/*
+ * main.c
+ */
+
+volatile int init = 1;
+volatile int diff=0;
+volatile int holds = 2;
+volatile int steps = 3;
+volatile int condition = 0;
+volatile int i = 0;
+volatile int high;
+volatile int low;
+
+
+void changeDirection(void)
+{
+	P1OUT ^= BIT6;
+}
+
+void moveDegree(void)
+{
+	int i;
+	Read_Acc();
+	__delay_cycles(1000);
+	for(i=0; i<4; i++)
+	{
+		P1OUT |= BIT5;
+		__delay_cycles(1000);
+		P1OUT &= ~BIT5;
+		__delay_cycles(1000);
+
+	}
+	P1OUT |= BIT5;
+//	condition = holds;
+}
+void hold()
+{
+	P1OUT |=BIT5;
+	for(i=0; i<11; i++)
+	{
+	__delay_cycles(1000000);
+	}
+//	condition = steps;
+}
+void initialPosition(void)
+{
+	int i;
+//	P1OUT &= ~BIT6;
+	//P1OUT |= BIT6;
+	for(i=0;i<100;i++)
+	{
+	   P1OUT |=BIT5;
+		__delay_cycles(1000);
+		P1OUT &= ~BIT5;
+		__delay_cycles(1000);
+	}
+	//__delay_cycles(1000000);
+	//condition = holds;
+}
+
+
+
+int main(void) {
+//    WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
+	//BCSCTL3= LFXT1S_2;
+	    P1DIR |= BIT6+BIT5+BIT4+BIT0;
+	    Setup_HW();
+	    P1OUT &= ~BIT0;    // LED test
+	    condition = 1;     // default setting for switch case
+	    //changeDirection(); // toggles the panel direction
+//	    P1OUT |= BIT6;
+	 //   __enable_interrupt();
+		while(1)
+		{
+			//diff=0;  //reset diff
+			Read_Acc();
+			__delay_cycles(100);
+//			P1OUT &= ~BIT0;
+//			diff=PhotoCellOne-PhotoCellTwo;
+//
+//			if(diff>0){
+//				P1OUT |=BIT6;
+//				//changeDirection();
+//			}
+//			 if(diff<0){
+//				 diff=diff*-1;
+//				 P1OUT &= ~BIT6;  //changeDirection();
+//			}
+//			 if(diff>35){
+//				 condition=steps;
+//			 }else{
+//				 condition=holds;
+//			 }
+//
+//
+//			switch(condition)
+//			{
+//			case 1: // init
+//				initialPosition();
+//				P1OUT |= BIT5;
+//				__delay_cycles(1000);
+//				break;
+//			case 2: // holds
+//
+//				hold();
+//				P1OUT = BIT5;
+//
+//				break;
+//			case 3: // steps
+//
+//				moveDegree();
+//				//condition = holds;
+//
+//				break;
+//			default:
+//				hold();
+//				Read_Acc();
+//				P1OUT |= BIT5;
+//				break;
+//			}
+//			// Check Photocells
+//			P1OUT |= BIT0;
+
+
+
+		}
+	}
+// ADC10 interrupt service routine
+#pragma vector=ADC10_VECTOR
+__interrupt void ADC10_ISR(void)
+{
+		diff=0;  //reset diff
+	__delay_cycles(25000);
+				P1OUT &= ~BIT0;
+				diff=PhotoCellOne-PhotoCellTwo;
+
+				if(diff>0){
+					P1OUT |=BIT6;
+					//changeDirection();
+				}
+				 if(diff<0){
+					 diff=diff*-1;
+					 P1OUT &= ~BIT6;  //changeDirection();
+				}
+				 if(diff>35){
+					 condition=steps;
+				 }else{
+					 condition=holds;
+				 }
+
+
+				switch(condition)
+				{
+				case 1: // init
+					initialPosition();
+					P1OUT |= BIT5;
+					__delay_cycles(1000);
+					break;
+				case 2: // holds
+
+					hold();
+					P1OUT = BIT5;
+
+					break;
+				case 3: // steps
+
+					moveDegree();
+					//condition = holds;
+
+					break;
+				default:
+					hold();
+					Read_Acc();
+					P1OUT |= BIT5;
+					break;
+				}
+				// Check Photocells
+				P1OUT |= BIT0;
+//				ADC10CTL0 &= ~ADC10IFG;
+  __bic_SR_register_on_exit(CPUOFF);        // Clear CPUOFF bit from 0(SR) exit low power mode before returning to main
+  ADC10CTL0 &= ~ADC10IFG;
+}
+
+void Setup_HW(void)
+{
+	  WDTCTL = WDTPW + WDTHOLD;                 // Stop WDT
+	  ADC10CTL1 = INCH_2 + CONSEQ_1+ADC10SSEL_2;            // use channel A2/A1, sequence of channels single sequence, BEGINS SAMPL AT A2 DOWN TO A1
+	  ADC10CTL0 = ADC10SHT_2 + MSC + ADC10ON + ADC10IE; // sample & hold 16xADCCloks, first rising edge and continue sample and convert after completion, enable interrupts
+	  ADC10DTC1 = 0x02;                         // 2 conversions
+	  ADC10AE0 |= BIT1 +BIT2;                         // Disable digital I/O on P1.1 to P1.2
+}
+void Read_Acc(void)
+{
+    ADC10CTL0 &= ~ENC;                      // DISABLE CONVERSIONS
+    while (ADC10CTL1 & BUSY);               // Wait if ADC10 core is active
+    ADC10SA = (unsigned int)adc;			// Copies data in ADC10SA to unsigned int adc array
+    ADC10CTL0 &= ~ ADC10IE;
+    ADC10CTL0 |= ENC + ADC10SC;             // Sampling and conversion start
+
+    PhotoCellOne = adc[0];						// adc array 0 copied to the variable PhotoCellOne
+    PhotoCellTwo = adc[1];						// adc array 1 copied to the variable PhotoCellTwo
+   // Z_Axis = adc[2];						// adc array 2 copied to the variable Z_Axis
+  //  __bis_SR_register(GIE);        // Enter LPM0, ADC10_ISR will force exit
+}
